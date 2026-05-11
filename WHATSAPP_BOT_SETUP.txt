@@ -1,0 +1,40 @@
+﻿================================================
+KTM MALL WHATSAPP BOT — SETUP COMPLETE SUMMARY
+================================================
+
+DONE AUTOMATICALLY:
+[OK] Evolution API running (Docker) — port 8080
+[OK] n8n running — port 5678
+[OK] 2 workflows imported into n8n:
+     - KTM Mall WhatsApp AI Sales Bot
+     - KTM Mall OpenClaw WhatsApp Handoff
+[OK] Evolution API webhook → n8n registered:
+     http://localhost:5678/webhook/ktm-mall-wa-bot
+
+WHAT YOU NEED TO DO (3 steps):
+
+STEP 1 — SCAN QR (connect WhatsApp)
+  Open: http://localhost:8080/manager
+  Login: API Key = B7kR9mX2pQ4nL6wT8vY3cF5hJ0dA3sE
+  Click n8nbot → Connect → Scan QR with your WhatsApp
+  (Open WhatsApp → Settings → Linked Devices → Link a Device)
+
+STEP 2 — SET ENV VARS IN N8N
+  Open: http://localhost:5678
+  Go to: Settings → Environment Variables → Add:
+    GOOGLE_SHEET_ID  = (your Sheet ID from the URL)
+    GEMINI_API_KEY   = (your Gemini key)
+    TEAM_WA_JID      = 977XXXXXXXXXX@s.whatsapp.net
+                       (Dreams Marketing number for alerts)
+    EVOLUTION_API_URL = http://localhost:8080
+    EVOLUTION_INSTANCE = n8nbot
+
+STEP 3 — ACTIVATE WORKFLOWS IN N8N
+  Open: http://localhost:5678/workflows
+  Toggle ON both:
+    - KTM Mall WhatsApp AI Sales Bot
+    - KTM Mall OpenClaw WhatsApp Handoff
+
+DONE! Test by sending a WhatsApp to the connected number.
+Bot replies automatically. HOT leads → you get alerted.
+================================================

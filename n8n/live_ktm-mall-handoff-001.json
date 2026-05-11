@@ -1,0 +1,610 @@
+{
+  "updatedAt": "2026-05-06T06:52:24.837Z",
+  "createdAt": "2026-05-05T04:26:19.167Z",
+  "id": "ktm-mall-handoff-001",
+  "name": "KTM Mall — WhatsApp First Message Handoff",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "id": "node-sheets-trigger",
+      "name": "New Lead in Sheet",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        176,
+        304
+      ],
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "ktm-sheets-trigger-cred",
+          "name": "Google Sheets Trigger OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-status",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "NEW",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-phone",
+              "leftValue": "={{ $json.WhatsApp }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-filter",
+      "name": "Only NEW with Phone",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $input.first().json;\n\n// Clean phone number â€” strip non-digits, ensure 977 prefix\nlet phone = (row.WhatsApp || row.Phone || '').replace(/\\D/g, '');\nif (phone.startsWith('0')) phone = '977' + phone.slice(1);\nif (!phone.startsWith('977')) phone = '977' + phone;\nconst waNumber = phone + '@s.whatsapp.net';\n\n// Space info â€” handle blank (chatbot leads)\nconst spaceName = row.Space && row.Space.trim() ? row.Space.trim() : null;\nconst priceLabel = row.Price && row.Price.trim() ? row.Price.trim() : null;\nconst clientName = row.Name && row.Name.trim() ? row.Name.trim() : 'ji';\n\nlet message;\nif (spaceName) {\n  message = `Namaste ${clientName}! ðŸ™\\n\\nThank you for your interest in *${spaceName}* at The Kathmandu Mall, Sundhara.\\n\\nI'm Priya from *Dreams Media & Marketing*. Is this a good time to discuss this advertising opportunity?\\n\\nðŸ“ Space: ${spaceName}\\n${priceLabel ? 'ðŸ’° Rate: ' + priceLabel + '\\n' : ''}\\nWe'd love to help your brand get maximum visibility at one of Kathmandu's busiest malls! ðŸ˜Š`;\n} else {\n  message = `Namaste ${clientName}! ðŸ™\\n\\nThank you for reaching out to *Dreams Media & Marketing* â€” The Kathmandu Mall advertising partner.\\n\\nI'm Priya. I saw you were exploring our advertising spaces. Which space caught your eye? I can share full details and pricing right away! ðŸ˜Š`;\n}\n\nreturn [{\n  json: {\n    waNumber,\n    message,\n    clientName,\n    spaceName,\n    rowNumber: row._rowNumber,\n    sheetId: process.env.1DiEOFOyLtFwGcPYDKR28HsUmTo8v_L5PUfrNduKoQLA\n  }\n}];\n"
+      },
+      "id": "node-build-payload",
+      "name": "Build WA Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:8080/message/sendText/n8nbot",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $json.waNumber }}\",\n  \"text\": \"{{ $json.message }}\",\n  \"delay\": 1200\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-evolution-send",
+      "name": "Send via Evolution API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        912,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "CONTACTED",
+            "Notes": "=WhatsApp sent via Evolution API at {{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "_rowNumber"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-update-status",
+      "name": "Mark CONTACTED in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1120,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IXbHdjd4tJThN6vn",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:8080/message/sendText/n8nbot",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"number\": \"{{ $('Build WA Message').item.json.waNumber }}\",\n  \"text\": \"ðŸ“‹ *KTM Mall Lead Alert*\\n\\nName: {{ $('Build WA Message').item.json.clientName }}\\nSpace: {{ $('Build WA Message').item.json.spaceName || 'Not specified' }}\\nPhone: {{ $('Build WA Message').item.json.waNumber.replace('@s.whatsapp.net','') }}\\n\\nOpening WhatsApp message sent âœ…\",\n  \"delay\": 500\n}",
+        "options": {}
+      },
+      "id": "node-notify-team",
+      "name": "Notify Sales Team",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1120,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log any Evolution API errors for debugging\nconst err = $input.first();\nconsole.error('Evolution API error:', JSON.stringify(err.json));\nreturn [{ json: { error: true, details: err.json } }];\n"
+      },
+      "id": "node-error-handler",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "New Lead in Sheet": {
+      "main": [
+        [
+          {
+            "node": "Only NEW with Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only NEW with Phone": {
+      "main": [
+        [
+          {
+            "node": "Build WA Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build WA Message": {
+      "main": [
+        [
+          {
+            "node": "Send via Evolution API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send via Evolution API": {
+      "main": [
+        [
+          {
+            "node": "Mark CONTACTED in Sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Notify Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:New Lead in Sheet": {
+      "documentId": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+      "sheetId": 0,
+      "lastIndexChecked": 0
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "9576eb4d-4cf3-48dd-b11f-53cf1b2fac5c",
+  "activeVersionId": "e8831f4a-2bcf-4799-a76e-318b4d7440ee",
+  "versionCounter": 26,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-05T04:26:19.173Z",
+      "createdAt": "2026-05-05T04:26:19.173Z",
+      "role": "workflow:owner",
+      "workflowId": "ktm-mall-handoff-001",
+      "projectId": "LVQ2u6IWHJM35tvh",
+      "project": {
+        "updatedAt": "2026-03-27T15:20:57.170Z",
+        "createdAt": "2026-03-08T04:57:33.458Z",
+        "id": "LVQ2u6IWHJM35tvh",
+        "name": "gyanendra info.dreamsmarkting@gmail.com <info.dreamsmarketing@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b61ab7-1a87-4931-b135-3dae98087745"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-05-06T02:59:24.791Z",
+    "createdAt": "2026-05-06T02:59:24.791Z",
+    "versionId": "e8831f4a-2bcf-4799-a76e-318b4d7440ee",
+    "workflowId": "ktm-mall-handoff-001",
+    "nodes": [
+      {
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Leads",
+            "mode": "name"
+          },
+          "event": "rowAdded"
+        },
+        "id": "node-sheets-trigger",
+        "name": "New Lead in Sheet",
+        "type": "n8n-nodes-base.googleSheetsTrigger",
+        "typeVersion": 1,
+        "position": [
+          240,
+          300
+        ],
+        "credentials": {
+          "googleSheetsTriggerOAuth2Api": {
+            "id": "ktm-sheets-trigger-cred",
+            "name": "Google Sheets Trigger OAuth2"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": false,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "cond-status",
+                "leftValue": "={{ $json.Status }}",
+                "rightValue": "NEW",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              },
+              {
+                "id": "cond-phone",
+                "leftValue": "={{ $json.WhatsApp }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-filter",
+        "name": "Only NEW with Phone",
+        "type": "n8n-nodes-base.filter",
+        "typeVersion": 2,
+        "position": [
+          460,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const row = $input.first().json;\n\n// Clean phone number â€” strip non-digits, ensure 977 prefix\nlet phone = (row.WhatsApp || row.Phone || '').replace(/\\D/g, '');\nif (phone.startsWith('0')) phone = '977' + phone.slice(1);\nif (!phone.startsWith('977')) phone = '977' + phone;\nconst waNumber = phone + '@s.whatsapp.net';\n\n// Space info â€” handle blank (chatbot leads)\nconst spaceName = row.Space && row.Space.trim() ? row.Space.trim() : null;\nconst priceLabel = row.Price && row.Price.trim() ? row.Price.trim() : null;\nconst clientName = row.Name && row.Name.trim() ? row.Name.trim() : 'ji';\n\nlet message;\nif (spaceName) {\n  message = `Namaste ${clientName}! ðŸ™\\n\\nThank you for your interest in *${spaceName}* at The Kathmandu Mall, Sundhara.\\n\\nI'm Priya from *Dreams Media & Marketing*. Is this a good time to discuss this advertising opportunity?\\n\\nðŸ“ Space: ${spaceName}\\n${priceLabel ? 'ðŸ’° Rate: ' + priceLabel + '\\n' : ''}\\nWe'd love to help your brand get maximum visibility at one of Kathmandu's busiest malls! ðŸ˜Š`;\n} else {\n  message = `Namaste ${clientName}! ðŸ™\\n\\nThank you for reaching out to *Dreams Media & Marketing* â€” The Kathmandu Mall advertising partner.\\n\\nI'm Priya. I saw you were exploring our advertising spaces. Which space caught your eye? I can share full details and pricing right away! ðŸ˜Š`;\n}\n\nreturn [{\n  json: {\n    waNumber,\n    message,\n    clientName,\n    spaceName,\n    rowNumber: row._rowNumber,\n    sheetId: process.env.1DiEOFOyLtFwGcPYDKR28HsUmTo8v_L5PUfrNduKoQLA\n  }\n}];\n"
+        },
+        "id": "node-build-payload",
+        "name": "Build WA Message",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          680,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=http://localhost:8080/message/sendText/n8nbot",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": []
+          },
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"number\": \"{{ $json.waNumber }}\",\n  \"text\": \"{{ $json.message }}\",\n  \"delay\": 1200\n}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "id": "node-evolution-send",
+        "name": "Send via Evolution API",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          900,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "update",
+          "documentId": {
+            "__rl": true,
+            "value": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "Leads",
+            "mode": "name"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Status": "CONTACTED",
+              "Notes": "=WhatsApp sent via Evolution API at {{ $now.toISO() }}"
+            },
+            "matchingColumns": [
+              "_rowNumber"
+            ],
+            "schema": [
+              {
+                "id": "Status",
+                "displayName": "Status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true
+              },
+              {
+                "id": "Notes",
+                "displayName": "Notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": false
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "node-update-status",
+        "name": "Mark CONTACTED in Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4,
+        "position": [
+          1120,
+          300
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuhqVgEAGcChcl09",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=http://localhost:8080/message/sendText/n8nbot",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"number\": \"{{ $('Build WA Message').item.json.waNumber }}\",\n  \"text\": \"ðŸ“‹ *KTM Mall Lead Alert*\\n\\nName: {{ $('Build WA Message').item.json.clientName }}\\nSpace: {{ $('Build WA Message').item.json.spaceName || 'Not specified' }}\\nPhone: {{ $('Build WA Message').item.json.waNumber.replace('@s.whatsapp.net','') }}\\n\\nOpening WhatsApp message sent âœ…\",\n  \"delay\": 500\n}",
+          "options": {}
+        },
+        "id": "node-notify-team",
+        "name": "Notify Sales Team",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1120,
+          460
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Log any Evolution API errors for debugging\nconst err = $input.first();\nconsole.error('Evolution API error:', JSON.stringify(err.json));\nreturn [{ json: { error: true, details: err.json } }];\n"
+        },
+        "id": "node-error-handler",
+        "name": "Log Error",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          900,
+          480
+        ]
+      }
+    ],
+    "connections": {
+      "New Lead in Sheet": {
+        "main": [
+          [
+            {
+              "node": "Only NEW with Phone",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Only NEW with Phone": {
+        "main": [
+          [
+            {
+              "node": "Build WA Message",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build WA Message": {
+        "main": [
+          [
+            {
+              "node": "Send via Evolution API",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send via Evolution API": {
+        "main": [
+          [
+            {
+              "node": "Mark CONTACTED in Sheet",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Notify Sales Team",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "import",
+    "name": "KTM Mall — WhatsApp First Message Handoff",
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": []
+  }
+}

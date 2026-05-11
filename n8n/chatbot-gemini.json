@@ -1,0 +1,167 @@
+{
+  "name": "KTM Mall — Chatbot (Gemini 1.5 Flash)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ktm-mall-chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "wh-1",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "ktm-mall-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Build Gemini request body ===\nconst body = $input.first().json.body || $input.first().json;\nconst message = String(body.message || '').slice(0, 2000);\nconst history = Array.isArray(body.history) ? body.history.slice(-10) : [];\nconst spaces  = Array.isArray(body.spaces)  ? body.spaces : [];\n\n// Compact spaces summary for the system prompt\nconst spacesSummary = spaces.map(s =>\n  `- ${s.id} | ${s.category} (${s.zone}) | ${s.name} — ${s.price_label} | ${s.size}${s.quantity > 1 ? ` | ${s.quantity} units` : ''}`\n).join('\\n');\n\nconst systemPrompt = `You are the friendly branding assistant for **The Kathmandu Mall** (Sundhara, Kathmandu — operated by Dreams Media & Marketing).\n\nMall facts:\n- 5-storey shopping complex at New Road / Sundhara, opposite Nepal's busiest bus stop\n- 12,000+ daily footfall, 100+ outlets, gateway to all 77 districts of Nepal\n- Rooftop event venue available\n- Sales WhatsApp: 9860499000\n\nAvailable advertising/branding spaces (id | category | name — price | size):\n${spacesSummary}\n\nRules:\n1. Reply in 2-4 short sentences. Use clear bullets if listing spaces.\n2. Always quote prices exactly as shown above (Rs. format).\n3. If user shows buying intent, ask for their WhatsApp number to forward to sales.\n4. If user gives a 10-digit Nepal phone (starts 98/97/96), confirm sales will WhatsApp them within 1 hour.\n5. Don't invent spaces, prices, or features that aren't in the list above.\n6. Be warm, concise, and use Nepali greetings (Namaste) when natural.\n7. If asked about something not in your data, say you'll connect them to sales.`;\n\n// Convert chat history to Gemini's contents array\nconst contents = [];\nfor (const m of history) {\n  contents.push({\n    role: m.role === 'assistant' ? 'model' : 'user',\n    parts: [{ text: String(m.content || '') }]\n  });\n}\ncontents.push({ role: 'user', parts: [{ text: message }] });\n\nreturn [{ json: {\n  geminiBody: {\n    system_instruction: { parts: [{ text: systemPrompt }] },\n    contents: contents,\n    generationConfig: {\n      temperature: 0.7,\n      maxOutputTokens: 400,\n      topP: 0.95\n    }\n  },\n  user_message: message\n} }];"
+      },
+      "id": "build-1",
+      "name": "Build Gemini Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.geminiBody) }}",
+        "options": {
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "gemini-1",
+      "name": "Gemini 1.5 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Extract reply text from Gemini response ===\nconst raw = $input.first().json;\nlet reply = '';\ntry {\n  reply = raw.candidates?.[0]?.content?.parts?.[0]?.text || '';\n} catch (e) { reply = ''; }\nif (!reply) reply = \"Sorry — I'm having a quick hiccup. WhatsApp 9860499000 and our team will help right away.\";\nreturn [{ json: { reply: reply.trim() } }];"
+      },
+      "id": "parse-1",
+      "name": "Parse Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { reply: $json.reply } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-1",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1180,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Gemini Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gemini Request": {
+      "main": [
+        [
+          {
+            "node": "Gemini 1.5 Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 1.5 Flash": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "id": "ktm-mall-chatbot-001"
+}

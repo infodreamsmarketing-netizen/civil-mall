@@ -1,0 +1,482 @@
+{
+  "updatedAt": "2026-05-06T03:00:23.000Z",
+  "createdAt": "2026-05-06T02:59:01.797Z",
+  "id": "ktm-mall-booking-001",
+  "name": "KTM Mall — Booking Webhook",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ktm-mall-booking",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook-1",
+      "name": "Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "ktm-mall-booking"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Validate + sanitize lead ===\nconst body = $input.first().json.body || $input.first().json;\n\nconst clean = (s, max = 200) => String(s || '').trim().slice(0, max);\nconst phone = clean(body.phone).replace(/\\D/g, '');\nconst phoneOk = /^9[678]\\d{8}$/.test(phone);\nconst honeypot = clean(body.company_url);\n\nif (honeypot) {\n  return [{ json: { ok: false, reason: 'honeypot', drop: true } }];\n}\nif (!phoneOk) {\n  return [{ json: { ok: false, reason: 'invalid_phone', drop: false } }];\n}\n\nreturn [{ json: {\n  ok: true,\n  drop: false,\n  ts_iso: new Date().toISOString(),\n  ts_local: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }),\n  space_id:    clean(body.space_id, 60),\n  space_name:  clean(body.space_name, 120),\n  price:       clean(body.price, 80),\n  name:        clean(body.name, 60) || 'Anonymous',\n  phone:       phone,\n  whatsapp_url: 'https://wa.me/977' + phone,\n  company:     clean(body.company, 80),\n  source:      clean(body.source, 60) || 'ktm-mall-spaces-page',\n  user_agent:  clean(body.user_agent, 250),\n  ip:          $input.first().json.headers?.['x-forwarded-for'] || $input.first().json.headers?.['x-real-ip'] || ''\n} }];"
+      },
+      "id": "validate-1",
+      "name": "Validate & Sanitize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-1",
+      "name": "If Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+          "mode": "id"
+        },
+        "sheetName": "Leads",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.ts_local }}",
+            "Space ID": "={{ $json.space_id }}",
+            "Space": "={{ $json.space_name }}",
+            "Price": "={{ $json.price }}",
+            "Name": "={{ $json.name }}",
+            "Phone": "={{ $json.phone }}",
+            "WhatsApp": "={{ $json.whatsapp_url }}",
+            "Company": "={{ $json.company }}",
+            "Source": "={{ $json.source }}",
+            "Status": "NEW",
+            "Owner": "",
+            "Notes": ""
+          }
+        },
+        "options": {}
+      },
+      "id": "sheet-1",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zuhqVgEAGcChcl09",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, ticketId: $json.ts_iso, message: 'Sales team will contact you within 1 hour.' } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-1",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1140,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={{ { ok: false, error: $json.reason || 'invalid' } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-2",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Sanitize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Sanitize": {
+      "main": [
+        [
+          {
+            "node": "If Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Valid": {
+      "main": [
+        [
+          {
+            "node": "Append to Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": null,
+  "versionId": "d6b90d5f-1f43-4a52-be57-9a09371ac02e",
+  "activeVersionId": "d6b90d5f-1f43-4a52-be57-9a09371ac02e",
+  "versionCounter": 17,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-06T02:59:01.805Z",
+      "createdAt": "2026-05-06T02:59:01.805Z",
+      "role": "workflow:owner",
+      "workflowId": "ktm-mall-booking-001",
+      "projectId": "LVQ2u6IWHJM35tvh",
+      "project": {
+        "updatedAt": "2026-03-27T15:20:57.170Z",
+        "createdAt": "2026-03-08T04:57:33.458Z",
+        "id": "LVQ2u6IWHJM35tvh",
+        "name": "gyanendra info.dreamsmarkting@gmail.com <info.dreamsmarketing@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b61ab7-1a87-4931-b135-3dae98087745"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-05-06T02:59:01.809Z",
+    "createdAt": "2026-05-06T02:59:01.809Z",
+    "versionId": "d6b90d5f-1f43-4a52-be57-9a09371ac02e",
+    "workflowId": "ktm-mall-booking-001",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "ktm-mall-booking",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "id": "webhook-1",
+        "name": "Booking Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ],
+        "webhookId": "ktm-mall-booking"
+      },
+      {
+        "parameters": {
+          "jsCode": "// === Validate + sanitize lead ===\nconst body = $input.first().json.body || $input.first().json;\n\nconst clean = (s, max = 200) => String(s || '').trim().slice(0, max);\nconst phone = clean(body.phone).replace(/\\D/g, '');\nconst phoneOk = /^9[678]\\d{8}$/.test(phone);\nconst honeypot = clean(body.company_url);\n\nif (honeypot) {\n  return [{ json: { ok: false, reason: 'honeypot', drop: true } }];\n}\nif (!phoneOk) {\n  return [{ json: { ok: false, reason: 'invalid_phone', drop: false } }];\n}\n\nreturn [{ json: {\n  ok: true,\n  drop: false,\n  ts_iso: new Date().toISOString(),\n  ts_local: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Kathmandu' }),\n  space_id:    clean(body.space_id, 60),\n  space_name:  clean(body.space_name, 120),\n  price:       clean(body.price, 80),\n  name:        clean(body.name, 60) || 'Anonymous',\n  phone:       phone,\n  whatsapp_url: 'https://wa.me/977' + phone,\n  company:     clean(body.company, 80),\n  source:      clean(body.source, 60) || 'ktm-mall-spaces-page',\n  user_agent:  clean(body.user_agent, 250),\n  ip:          $input.first().json.headers?.['x-forwarded-for'] || $input.first().json.headers?.['x-real-ip'] || ''\n} }];"
+        },
+        "id": "validate-1",
+        "name": "Validate & Sanitize",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          460,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose"
+            },
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          }
+        },
+        "id": "if-1",
+        "name": "If Valid",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          680,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": "1HxyzZNhmPXU3LLjk1STczPQFA4XMktWsruQ6MmKXHJc",
+          "sheetName": "Leads",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "Timestamp": "={{ $json.ts_local }}",
+              "Space ID": "={{ $json.space_id }}",
+              "Space": "={{ $json.space_name }}",
+              "Price": "={{ $json.price }}",
+              "Name": "={{ $json.name }}",
+              "Phone": "={{ $json.phone }}",
+              "WhatsApp": "={{ $json.whatsapp_url }}",
+              "Company": "={{ $json.company }}",
+              "Source": "={{ $json.source }}",
+              "Status": "NEW",
+              "Owner": "",
+              "Notes": ""
+            }
+          },
+          "options": {}
+        },
+        "id": "sheet-1",
+        "name": "Append to Google Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          900,
+          200
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "zuhqVgEAGcChcl09",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { ok: true, ticketId: $json.ts_iso, message: 'Sales team will contact you within 1 hour.' } }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type"
+                }
+              ]
+            }
+          }
+        },
+        "id": "respond-1",
+        "name": "Respond OK",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1140,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseCode": 400,
+          "responseBody": "={{ { ok: false, error: $json.reason || 'invalid' } }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                }
+              ]
+            }
+          }
+        },
+        "id": "respond-2",
+        "name": "Respond Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          900,
+          420
+        ]
+      }
+    ],
+    "connections": {
+      "Booking Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate & Sanitize",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate & Sanitize": {
+        "main": [
+          [
+            {
+              "node": "If Valid",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Valid": {
+        "main": [
+          [
+            {
+              "node": "Append to Google Sheet",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Append to Google Sheet": {
+        "main": [
+          [
+            {
+              "node": "Respond OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "import",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": []
+  }
+}

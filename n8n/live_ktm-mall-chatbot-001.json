@@ -1,0 +1,386 @@
+{
+  "updatedAt": "2026-05-06T07:39:21.741Z",
+  "createdAt": "2026-05-06T03:09:45.368Z",
+  "id": "ktm-mall-chatbot-001",
+  "name": "KTM Mall — Chatbot (Gemini 1.5 Flash)",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ktm-mall-chat",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "wh-1",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "ktm-mall-chat"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Build Gemini request body ===\nconst body = $input.first().json.body || $input.first().json;\nconst message = String(body.message || '').slice(0, 2000);\nconst history = Array.isArray(body.history) ? body.history.slice(-10) : [];\nconst spaces  = Array.isArray(body.spaces)  ? body.spaces : [];\n\n// Compact spaces summary for the system prompt\nconst spacesSummary = spaces.map(s =>\n  `- ${s.id} | ${s.category} (${s.zone}) | ${s.name} — ${s.price_label} | ${s.size}${s.quantity > 1 ? ` | ${s.quantity} units` : ''}`\n).join('\\n');\n\nconst systemPrompt = `You are the friendly branding assistant for **The Kathmandu Mall** (Sundhara, Kathmandu — operated by Dreams Media & Marketing).\n\nMall facts:\n- 5-storey shopping complex at New Road / Sundhara, opposite Nepal's busiest bus stop\n- 12,000+ daily footfall, 100+ outlets, gateway to all 77 districts of Nepal\n- Rooftop event venue available\n- Sales WhatsApp: 9860499000\n\nAvailable advertising/branding spaces (id | category | name — price | size):\n${spacesSummary}\n\nRules:\n1. Reply in 2-4 short sentences. Use clear bullets if listing spaces.\n2. Always quote prices exactly as shown above (Rs. format).\n3. If user shows buying intent, ask for their WhatsApp number to forward to sales.\n4. If user gives a 10-digit Nepal phone (starts 98/97/96), confirm sales will WhatsApp them within 1 hour.\n5. Don't invent spaces, prices, or features that aren't in the list above.\n6. Be warm, concise, and use Nepali greetings (Namaste) when natural.\n7. If asked about something not in your data, say you'll connect them to sales.`;\n\n// Convert chat history to Gemini's contents array\nconst contents = [];\nfor (const m of history) {\n  contents.push({\n    role: m.role === 'assistant' ? 'model' : 'user',\n    parts: [{ text: String(m.content || '') }]\n  });\n}\ncontents.push({ role: 'user', parts: [{ text: message }] });\n\nreturn [{ json: {\n  geminiBody: {\n    system_instruction: { parts: [{ text: systemPrompt }] },\n    contents: contents,\n    generationConfig: {\n      temperature: 0.7,\n      maxOutputTokens: 400,\n      topP: 0.95\n    }\n  },\n  user_message: message\n} }];"
+      },
+      "id": "build-1",
+      "name": "Build Gemini Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.geminiBody) }}\n\n\n\n",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 25000
+        }
+      },
+      "id": "gemini-1",
+      "name": "Gemini 1.5 Flash",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Extract reply text from Gemini response ===\nconst raw = $input.first().json;\nlet reply = '';\ntry {\n  reply = raw.candidates?.[0]?.content?.parts?.[0]?.text || '';\n} catch (e) { reply = ''; }\nif (!reply) reply = \"Sorry — I'm having a quick hiccup. WhatsApp 9860499000 and our team will help right away.\";\nreturn [{ json: { reply: reply.trim() } }];"
+      },
+      "id": "parse-1",
+      "name": "Parse Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { reply: $json.reply } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "POST, OPTIONS"
+              },
+              {
+                "name": "Access-Control-Allow-Headers",
+                "value": "Content-Type"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-1",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1184,
+        304
+      ]
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Gemini Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Gemini Request": {
+      "main": [
+        [
+          {
+            "node": "Gemini 1.5 Flash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini 1.5 Flash": {
+      "main": [
+        [
+          {
+            "node": "Parse Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "c46680c4-8113-45d1-886c-8427fb71fa0d",
+  "activeVersionId": "70043b8e-b7eb-480d-b9b0-193eade0ee36",
+  "versionCounter": 17,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-05-06T03:09:45.376Z",
+      "createdAt": "2026-05-06T03:09:45.376Z",
+      "role": "workflow:owner",
+      "workflowId": "ktm-mall-chatbot-001",
+      "projectId": "LVQ2u6IWHJM35tvh",
+      "project": {
+        "updatedAt": "2026-03-27T15:20:57.170Z",
+        "createdAt": "2026-03-08T04:57:33.458Z",
+        "id": "LVQ2u6IWHJM35tvh",
+        "name": "gyanendra info.dreamsmarkting@gmail.com <info.dreamsmarketing@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "d2b61ab7-1a87-4931-b135-3dae98087745"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-05-06T03:09:45.379Z",
+    "createdAt": "2026-05-06T03:09:45.379Z",
+    "versionId": "70043b8e-b7eb-480d-b9b0-193eade0ee36",
+    "workflowId": "ktm-mall-chatbot-001",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "ktm-mall-chat",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "id": "wh-1",
+        "name": "Chat Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          300
+        ],
+        "webhookId": "ktm-mall-chat"
+      },
+      {
+        "parameters": {
+          "jsCode": "// === Build Gemini request body ===\nconst body = $input.first().json.body || $input.first().json;\nconst message = String(body.message || '').slice(0, 2000);\nconst history = Array.isArray(body.history) ? body.history.slice(-10) : [];\nconst spaces  = Array.isArray(body.spaces)  ? body.spaces : [];\n\n// Compact spaces summary for the system prompt\nconst spacesSummary = spaces.map(s =>\n  `- ${s.id} | ${s.category} (${s.zone}) | ${s.name} — ${s.price_label} | ${s.size}${s.quantity > 1 ? ` | ${s.quantity} units` : ''}`\n).join('\\n');\n\nconst systemPrompt = `You are the friendly branding assistant for **The Kathmandu Mall** (Sundhara, Kathmandu — operated by Dreams Media & Marketing).\n\nMall facts:\n- 5-storey shopping complex at New Road / Sundhara, opposite Nepal's busiest bus stop\n- 12,000+ daily footfall, 100+ outlets, gateway to all 77 districts of Nepal\n- Rooftop event venue available\n- Sales WhatsApp: 9860499000\n\nAvailable advertising/branding spaces (id | category | name — price | size):\n${spacesSummary}\n\nRules:\n1. Reply in 2-4 short sentences. Use clear bullets if listing spaces.\n2. Always quote prices exactly as shown above (Rs. format).\n3. If user shows buying intent, ask for their WhatsApp number to forward to sales.\n4. If user gives a 10-digit Nepal phone (starts 98/97/96), confirm sales will WhatsApp them within 1 hour.\n5. Don't invent spaces, prices, or features that aren't in the list above.\n6. Be warm, concise, and use Nepali greetings (Namaste) when natural.\n7. If asked about something not in your data, say you'll connect them to sales.`;\n\n// Convert chat history to Gemini's contents array\nconst contents = [];\nfor (const m of history) {\n  contents.push({\n    role: m.role === 'assistant' ? 'model' : 'user',\n    parts: [{ text: String(m.content || '') }]\n  });\n}\ncontents.push({ role: 'user', parts: [{ text: message }] });\n\nreturn [{ json: {\n  geminiBody: {\n    system_instruction: { parts: [{ text: systemPrompt }] },\n    contents: contents,\n    generationConfig: {\n      temperature: 0.7,\n      maxOutputTokens: 400,\n      topP: 0.95\n    }\n  },\n  user_message: message\n} }];"
+        },
+        "id": "build-1",
+        "name": "Build Gemini Request",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          460,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite-latest:generateContent?key={{ $env.GEMINI_API_KEY }}",
+          "method": "POST",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.geminiBody) }}",
+          "options": {
+            "timeout": 25000,
+            "response": {
+              "response": {
+                "responseFormat": "json"
+              }
+            }
+          }
+        },
+        "id": "gemini-1",
+        "name": "Gemini 1.5 Flash",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          700,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// === Extract reply text from Gemini response ===\nconst raw = $input.first().json;\nlet reply = '';\ntry {\n  reply = raw.candidates?.[0]?.content?.parts?.[0]?.text || '';\n} catch (e) { reply = ''; }\nif (!reply) reply = \"Sorry — I'm having a quick hiccup. WhatsApp 9860499000 and our team will help right away.\";\nreturn [{ json: { reply: reply.trim() } }];"
+        },
+        "id": "parse-1",
+        "name": "Parse Reply",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          940,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { reply: $json.reply } }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                },
+                {
+                  "name": "Access-Control-Allow-Methods",
+                  "value": "POST, OPTIONS"
+                },
+                {
+                  "name": "Access-Control-Allow-Headers",
+                  "value": "Content-Type"
+                }
+              ]
+            }
+          }
+        },
+        "id": "respond-1",
+        "name": "Respond",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1180,
+          300
+        ]
+      }
+    ],
+    "connections": {
+      "Chat Webhook": {
+        "main": [
+          [
+            {
+              "node": "Build Gemini Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Gemini Request": {
+        "main": [
+          [
+            {
+              "node": "Gemini 1.5 Flash",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gemini 1.5 Flash": {
+        "main": [
+          [
+            {
+              "node": "Parse Reply",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Reply": {
+        "main": [
+          [
+            {
+              "node": "Respond",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "import",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-05-06T07:39:21.818Z",
+        "id": 82,
+        "workflowId": "ktm-mall-chatbot-001",
+        "versionId": "70043b8e-b7eb-480d-b9b0-193eade0ee36",
+        "event": "activated",
+        "userId": "d2b61ab7-1a87-4931-b135-3dae98087745"
+      },
+      {
+        "createdAt": "2026-05-06T07:39:21.799Z",
+        "id": 81,
+        "workflowId": "ktm-mall-chatbot-001",
+        "versionId": "70043b8e-b7eb-480d-b9b0-193eade0ee36",
+        "event": "deactivated",
+        "userId": "d2b61ab7-1a87-4931-b135-3dae98087745"
+      }
+    ]
+  }
+}
