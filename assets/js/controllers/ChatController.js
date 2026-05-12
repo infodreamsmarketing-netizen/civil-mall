@@ -15,16 +15,16 @@ KTM.ChatController = {
         document.querySelector("#chat-form").requestSubmit();
       });
     });
-
+    
     document.querySelector("#chat-form")?.addEventListener("submit", e => this._handleSend(e));
   },
-
+  
   _localFallback(q) {
     const lo = q.toLowerCase();
     if (/cheap|low|afford|budget/.test(lo)) {
       const cheapest = KTM.DataModel.spaces.slice().sort((a, b) => a.price_npr - b.price_npr).slice(0, 3);
       return "Most affordable spaces:\n" +
-             cheapest.map(s => `• ${s.name} — ${s.price_label}`).join("\n") +
+      cheapest.map(s => `• ${s.name} — ${s.price_label}`).join("\n") +
              "\n\nWant to reserve one? Tap any card on the page.";
     }
     if (/lift/.test(lo)) {
@@ -49,26 +49,27 @@ KTM.ChatController = {
     e.preventDefault();
     const q = KTM.ChatView.getInput();
     if (!q) return;
-
+    
     KTM.ChatView.clearInput();
     KTM.ChatView.pushMessage("user", q);
     this._history.push({ role: "user", content: q });
 
     const typing = KTM.ChatView.pushMessage("bot", "…");
     let reply = "";
-
-try {
+    
+    try {
+  const base = KTM.CONFIG.N8N_BASE;
     const r = await fetch(base + KTM.CONFIG.CHAT_PATH, {
-        method: "POST",
+      method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             message: q,
             history: this._history.slice(-10),
             spaces: KTM.DataModel.spaces
-        })
-    });
-
-    // Check if the response is empty
+          })
+        });
+        
+        // Check if the response is empty
     const text = await r.text();
     if (!text) {
         throw new Error("Empty response from server");
@@ -88,7 +89,6 @@ try {
 
     // Auto-capture phone numbers shared in chat as booking leads
     const phoneMatch = q.match(/9[678]\d{8}/);
-    const base = KTM.CONFIG.N8N_BASE;
     if (phoneMatch && base && !base.includes("{{")) {
       fetch(base + KTM.CONFIG.BOOKING_PATH, {
         method:  "POST",
