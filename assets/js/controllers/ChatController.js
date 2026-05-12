@@ -57,30 +57,31 @@ KTM.ChatController = {
     const typing = KTM.ChatView.pushMessage("bot", "…");
     let reply = "";
 
-    try {
-      print(KTM.CONFIG.N8N_BASE 
-      )
-      const base = KTM.CONFIG.N8N_BASE;
-      if (base && !base.includes("{{")) {
-        const r = await fetch(base + KTM.CONFIG.CHAT_PATH, {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({
+try {
+    const r = await fetch(base + KTM.CONFIG.CHAT_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
             message: q,
             history: this._history.slice(-10),
-            spaces:  KTM.DataModel.spaces
-          })
-        });
-        const j = await r.json();
-        reply = j.reply || j.text || j.output || this._localFallback(q);
-      } else {
-        reply = this._localFallback(q);
-        await new Promise(r => setTimeout(r, 400));
-      }
-    } catch (err) {
-      console.error("[chat] error", err);
-      reply = this._localFallback(q);
+            spaces: KTM.DataModel.spaces
+        })
+    });
+
+    // Check if the response is empty
+    const text = await r.text();
+    if (!text) {
+        throw new Error("Empty response from server");
     }
+
+    const j = JSON.parse(text);
+    reply = j.reply || j.text || j.output || this._localFallback(q);
+
+} catch (err) {
+    console.error("[chat] error", err);
+    // If n8n fails, show the local fallback so the user isn't stuck
+    reply = this._localFallback(q);
+}
 
     if (typing) typing.textContent = reply;
     this._history.push({ role: "assistant", content: reply });
