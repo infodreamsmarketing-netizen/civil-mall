@@ -44,45 +44,47 @@ KTM.ChatController = {
     }
     return `We have ${KTM.DataModel.spaces.length} branding spaces — from Rs. 4,000/month pillars to the Rs. 25,00,000/year flagship light board. What's your budget or preferred location (façade, gate, lift, floor, parking)?`;
   },
-
+  
   async _handleSend(e) {
+    const base = KTM.CONFIG.N8N_BASE; 
     e.preventDefault();
     const q = KTM.ChatView.getInput();
     if (!q) return;
-    
+
     KTM.ChatView.clearInput();
     KTM.ChatView.pushMessage("user", q);
     this._history.push({ role: "user", content: q });
 
     const typing = KTM.ChatView.pushMessage("bot", "…");
     let reply = "";
-    
+
     try {
-  const base = KTM.CONFIG.N8N_BASE;
-    const r = await fetch(base + KTM.CONFIG.CHAT_PATH, {
-      method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            message: q,
-            history: this._history.slice(-10),
-            spaces: KTM.DataModel.spaces
-          })
-        });
+        // 1. Define 'base' FIRST
         
-        // Check if the response is empty
-    const text = await r.text();
-    if (!text) {
-        throw new Error("Empty response from server");
+        // 2. Now you can safely use 'base'
+        if (base && !base.includes("{{")) {
+            const r = await fetch(base + KTM.CONFIG.CHAT_PATH, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    message: q,
+                    history: this._history.slice(-10),
+                    spaces: KTM.DataModel.spaces
+                })
+            });
+
+            const text = await r.text();
+            if (!text) throw new Error("Empty response");
+
+            const j = JSON.parse(text);
+            reply = j.reply || j.text || this._localFallback(q);
+        } else {
+            reply = this._localFallback(q);
+        }
+    } catch (err) {
+        console.error("[chat] error", err);
+        reply = this._localFallback(q);
     }
-
-    const j = JSON.parse(text);
-    reply = j.reply || j.text || j.output || this._localFallback(q);
-
-} catch (err) {
-    console.error("[chat] error", err);
-    // If n8n fails, show the local fallback so the user isn't stuck
-    reply = this._localFallback(q);
-}
 
     if (typing) typing.textContent = reply;
     this._history.push({ role: "assistant", content: reply });
