@@ -102,7 +102,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:8080/message/sendText/n8nbot",
+        "url": "https://n8n-mard.srv1527661.hstgr.cloud",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
