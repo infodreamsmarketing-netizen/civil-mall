@@ -58,7 +58,7 @@ KTM.ChatController = {
     let reply = "";
 
     try {
-      print(KTM.CONFIG.N8N_BASE + KTM.CONFIG.CHAT_PATH
+      print(KTM.CONFIG.N8N_BASE 
       )
       const base = KTM.CONFIG.N8N_BASE;
       if (base && !base.includes("{{")) {
